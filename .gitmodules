@@ -10,3 +10,12 @@
 [submodule "xust"]
 	path = xust
 	url = https://gitlab.gnome.org/vandenoever/xust.git
+[submodule "tests/qt3tests"]
+	path = tests/qt3tests
+	url = https://github.com/w3c/qt3tests.git
+[submodule "tests/xslt30-test"]
+	path = tests/xslt30-test
+	url = https://github.com/w3c/xslt30-test.git
+[submodule "tests/xsdtests"]
+	path = tests/xsdtests
+	url = https://github.com/w3c/xsdtests.git
