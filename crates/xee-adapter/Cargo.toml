@@ -2,8 +2,15 @@
 name = "xee-adapter"
 version = "0.1.0"
 edition = "2021"
+authors = ["x-rs contributors"]
+description = "Adapter for xee XML engine"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 xml-engine-traits = { path = "../xml-engine-traits" }
-# xee dependencies will be added as we implement
-# xot = { workspace = true }
+xot = { path = "../../xot" }
+xee-xpath = { path = "../../xee/xee-xpath" }
+xee-interpreter = { path = "../../xee/xee-interpreter" }
+iri-string = "0.7"
+
+[dev-dependencies]
