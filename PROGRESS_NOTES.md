@@ -36,12 +36,41 @@ pub trait LocalXPathEngine { ... }  // Same API, no Send/Sync
 
 This allows both thread-safe and single-threaded engines to coexist.
 
+### Investigation Results ✅
+
+**xrust Threading:**
+- Uses `Rc<T>` exclusively throughout codebase
+- No `Arc` usage found
+- No `Send` or `Sync` trait bounds anywhere
+- Designed as single-threaded library
+
+**xust Threading:**
+- Uses both `Rc<T>` and `Arc<T>`
+- Some traits like `TypeResolver` require `Sync + Send`
+- Core evaluation types use `Rc<T>`
+- Mixed threading model but primarily single-threaded
+
+**Conclusion:**
+All three XML libraries (xee, xrust, xust) are fundamentally single-threaded designs using `Rc<T>`. Adding `Send + Sync` requirements to our traits makes them incompatible with the entire Rust XML ecosystem.
+
+### Decision: Remove Send/Sync Requirements ✅
+
+**Rationale:**
+1. All target libraries use `Rc<T>` for core types
+2. XML processing is typically single-threaded
+3. Users needing thread-safety can wrap engines in `Arc<Mutex<T>>`
+4. Simpler design that matches ecosystem reality
+
+**Action:**
+Remove `Send + Sync` bounds from all trait associated types and self bounds.
+
 ### Next Steps
 
-1. **Decision needed**: How to handle Send/Sync requirements
-2. Implement xrust-adapter (uses different threading model)
-3. Implement xust-adapter
-4. Build test harness once adapter strategy is finalized
+1. **Remove Send/Sync from traits** ✅ (decided)
+2. Update xee-adapter to compile without Send/Sync
+3. Implement xrust-adapter
+4. Implement xust-adapter
+5. Build test harness
 
 ## Implementation Strategy Going Forward
 

@@ -8,18 +8,22 @@ use std::collections::HashMap;
 ///
 /// This trait abstracts over different XSLT implementation strategies,
 /// allowing different engines to be used interchangeably.
-pub trait XsltEngine: Send + Sync {
+///
+/// Note: This trait does not require Send + Sync as most XML
+/// libraries use Rc<T> for internal references. Users needing
+/// thread-safety should wrap the engine in Arc<Mutex<T>>.
+pub trait XsltEngine {
     /// The XML tree implementation this engine works with
     type Tree: XmlTree;
 
     /// Type representing a compiled stylesheet
-    type Stylesheet: Send + Sync;
+    type Stylesheet;
 
     /// Type representing transformation context
-    type Context: Clone + Send + Sync;
+    type Context: Clone;
 
     /// Type representing transformation parameters
-    type Parameters: Clone + Send + Sync + Default;
+    type Parameters: Clone + Default;
 
     /// Get access to the underlying tree
     fn tree(&mut self) -> &mut Self::Tree;

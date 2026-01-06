@@ -27,12 +27,16 @@ pub enum NodeType {
 /// This trait abstracts over different XML tree representations,
 /// allowing engines with different internal tree structures to
 /// be used interchangeably.
-pub trait XmlTree: Send + Sync {
+///
+/// Note: This trait does not require Send + Sync as most XML
+/// libraries use Rc<T> for internal node references. Users needing
+/// thread-safety should wrap the engine in Arc<Mutex<T>>.
+pub trait XmlTree {
     /// Type representing a node handle in this tree
-    type Node: Clone + Send + Sync + Debug;
+    type Node: Clone + Debug;
 
     /// Type representing a document handle in this tree
-    type Document: Clone + Send + Sync + Debug;
+    type Document: Clone + Debug;
 
     /// Parse XML from a string and return a document handle
     fn parse_xml(&mut self, xml: &str) -> Result<Self::Document>;

@@ -7,18 +7,22 @@ use crate::tree::XmlTree;
 ///
 /// This trait abstracts over different XQuery implementation strategies,
 /// allowing different engines to be used interchangeably.
-pub trait XQueryEngine: Send + Sync {
+///
+/// Note: This trait does not require Send + Sync as most XML
+/// libraries use Rc<T> for internal references. Users needing
+/// thread-safety should wrap the engine in Arc<Mutex<T>>.
+pub trait XQueryEngine {
     /// The XML tree implementation this engine works with
     type Tree: XmlTree;
 
     /// Type representing a compiled query
-    type Query: Send + Sync;
+    type Query;
 
     /// Type representing an execution context
-    type Context: Clone + Send + Sync;
+    type Context: Clone;
 
     /// Type representing a query result sequence
-    type Sequence: Clone + Send + Sync;
+    type Sequence: Clone;
 
     /// Get access to the underlying tree
     fn tree(&mut self) -> &mut Self::Tree;
