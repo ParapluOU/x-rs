@@ -1,0 +1,8 @@
+[package]
+name = "xust-adapter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+xml-engine-traits = { path = "../xml-engine-traits" }
+# xust dependencies will be added as we implement

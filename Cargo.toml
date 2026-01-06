@@ -1,0 +1,29 @@
+[workspace]
+members = [
+    "crates/xml-engine-traits",
+    "crates/xee-adapter",
+    "crates/xrust-adapter",
+    "crates/xust-adapter",
+    "crates/xml-test-harness",
+    "crates/xml-compliance-matrix",
+    "crates/xml-test-cli",
+]
+resolver = "2"
+
+[workspace.dependencies]
+thiserror = "2.0"
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+
+# XML libraries
+xot = { path = "xot" }
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

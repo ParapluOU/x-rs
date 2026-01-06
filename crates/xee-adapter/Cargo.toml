@@ -1,0 +1,9 @@
+[package]
+name = "xee-adapter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+xml-engine-traits = { path = "../xml-engine-traits" }
+# xee dependencies will be added as we implement
+# xot = { workspace = true }

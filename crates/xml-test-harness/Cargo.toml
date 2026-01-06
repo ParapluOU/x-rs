@@ -1,0 +1,8 @@
+[package]
+name = "xml-test-harness"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+xml-engine-traits = { path = "../xml-engine-traits" }
+serde = { workspace = true }

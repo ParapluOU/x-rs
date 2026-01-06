@@ -1,0 +1,10 @@
+[package]
+name = "xml-compliance-matrix"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+xml-engine-traits = { path = "../xml-engine-traits" }
+xml-test-harness = { path = "../xml-test-harness" }
+serde = { workspace = true }
+serde_json = { workspace = true }

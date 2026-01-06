@@ -1,0 +1,8 @@
+[package]
+name = "xrust-adapter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+xml-engine-traits = { path = "../xml-engine-traits" }
+# xrust dependencies will be added as we implement
