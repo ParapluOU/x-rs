@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -1073,20 +1074,33 @@ pub fn run_xpath_tests(
 
     let base_dir = catalog_path.parent().unwrap_or(Path::new("."));
 
-    // Run each test set
-    for test_set_ref in &catalog.test_sets {
-        // Apply filter
-        if let Some(f) = filter {
-            if !test_set_ref.name.contains(f) {
-                continue;
+    // Filter test sets to run
+    let test_sets_to_run: Vec<_> = catalog.test_sets.iter()
+        .filter(|ts| {
+            if let Some(f) = filter {
+                ts.name.contains(f)
+            } else {
+                true
             }
-        }
+        })
+        .collect();
+    let total_test_sets = test_sets_to_run.len();
+
+    // Run each test set
+    for (set_idx, test_set_ref) in test_sets_to_run.iter().enumerate() {
+        // Progress reporting
+        eprintln!("[{}/{}] Processing test set: {}", set_idx + 1, total_test_sets, test_set_ref.name);
 
         let test_set_path = base_dir.join(&test_set_ref.file);
 
-        let test_set = match parse_test_set(&test_set_path, &catalog.environments) {
-            Ok(ts) => ts,
-            Err(e) => {
+        // Wrap test set parsing in catch_unwind to handle panics
+        let parse_result = panic::catch_unwind(AssertUnwindSafe(|| {
+            parse_test_set(&test_set_path, &catalog.environments)
+        }));
+
+        let test_set = match parse_result {
+            Ok(Ok(ts)) => ts,
+            Ok(Err(e)) => {
                 results.push(TestResult {
                     test_id: format!("{}/parse", test_set_ref.name),
                     outcome: TestOutcome::Error(format!("Failed to parse test set: {}", e)),
@@ -1096,12 +1110,56 @@ pub fn run_xpath_tests(
                 });
                 continue;
             }
+            Err(panic_info) => {
+                let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "Unknown panic".to_string()
+                };
+                results.push(TestResult {
+                    test_id: format!("{}/parse", test_set_ref.name),
+                    outcome: TestOutcome::Error(format!("Panic during test set parse: {}", panic_msg)),
+                    expected: None,
+                    actual: Some("PANIC".to_string()),
+                    duration: std::time::Duration::ZERO,
+                });
+                continue;
+            }
         };
 
         // Run each test case
         for test_case in &test_set.test_cases {
-            let result = run_test_case(engine, test_case, &test_set.environments, &test_set_path.parent().unwrap_or(Path::new(".")));
-            results.push(result);
+            let start = Instant::now();
+            let test_id = test_case.name.clone();
+
+            // Wrap in catch_unwind to handle engine panics gracefully
+            let result = panic::catch_unwind(AssertUnwindSafe(|| {
+                run_test_case(engine, test_case, &test_set.environments, &test_set_path.parent().unwrap_or(Path::new(".")))
+            }));
+
+            let test_result = match result {
+                Ok(r) => r,
+                Err(panic_info) => {
+                    // Extract panic message
+                    let panic_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                        s.to_string()
+                    } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                        s.clone()
+                    } else {
+                        "Unknown panic".to_string()
+                    };
+                    TestResult {
+                        test_id,
+                        outcome: TestOutcome::Error(format!("Engine panic: {}", panic_msg)),
+                        expected: None,
+                        actual: Some("PANIC".to_string()),
+                        duration: start.elapsed(),
+                    }
+                }
+            };
+            results.push(test_result);
         }
     }
 

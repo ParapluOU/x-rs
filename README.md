@@ -72,11 +72,20 @@ A collection of Rust XML/XPath/XSLT/XQuery libraries and W3C conformance test su
 
 ### XPath/XQuery (QT3 Test Suite)
 
-| Library | Tests Run | Passed | Pass Rate |
-|---------|-----------|--------|-----------|
-| xee | 21,859 | 19,987 | 91% |
-| xrust | - | - | - |
-| xust | - | - | - |
+Tested using the `x-engine` unified wrapper (2026-01-06):
+
+| Library | Total | Passed | Failed | Errors | Pass Rate |
+|---------|-------|--------|--------|--------|-----------|
+| **xee** | 31,821 | 19,687 | 5,252 | 53 | **61.9%** |
+| **xust** | 31,821 | 11,623 | 14,792 | 5 | **36.5%** |
+| **xrust** | 31,821 | 4,920 | 18,235 | 178 | **15.5%** |
+
+Run conformance tests with:
+```bash
+just test-all        # Run all engines in parallel
+just test xee        # Run single engine
+just compare         # Generate comparison report
+```
 
 ### XML Schema (XSD Test Suite)
 
@@ -115,14 +124,18 @@ W3C conformance test suites included as submodules:
 
 ```
 x-rs/
+├── x-engine/               # Unified engine wrapper & test driver
 ├── xee/                    # XPath 3.1 / XSLT 3.0
 ├── xot/                    # XML tree library
 ├── xrust/                  # XPath/XSLT processor
 ├── xust/                   # XQuery 3.1 / XSD 1.1
-└── tests/
-    ├── qt3tests/           # W3C XPath/XQuery tests
-    ├── xslt30-test/        # W3C XSLT 3.0 tests
-    └── xsdtests/           # W3C XSD tests
+├── results/                # Conformance test results
+├── tests/
+│   ├── qt3tests/           # W3C XPath/XQuery tests
+│   ├── xslt30-test/        # W3C XSLT 3.0 tests
+│   └── xsdtests/           # W3C XSD tests
+├── Cargo.toml              # Workspace configuration
+└── Justfile                # Task runner commands
 ```
 
 ## License

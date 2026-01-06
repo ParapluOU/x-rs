@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "x-engine",
+]
+
+# Exclude the submodules - they have their own workspaces
+exclude = [
+    "xee",
+    "xot",
+    "xrust",
+    "xust",
+]
