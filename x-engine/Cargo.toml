@@ -1,0 +1,30 @@
+[package]
+name = "x-engine"
+version = "0.1.0"
+edition = "2021"
+description = "Unified XML/XPath/XSLT/XQuery engine wrapper for conformance testing"
+
+[dependencies]
+thiserror = "1"
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+hex = "0.4"
+base64 = "0.22"
+
+# Engine dependencies
+xee-xpath = { path = "../xee/xee-xpath" }
+xee-interpreter = { path = "../xee/xee-interpreter" }
+xee-xslt-compiler = { path = "../xee/xee-xslt-compiler" }
+xot = "0.31.2"
+xrust = { path = "../xrust" }
+xust_xml = { path = "../xust/xml" }
+xust_grammar = { path = "../xust/grammar" }
+xust_eval = { path = "../xust/eval" }
+xust_xsd = { path = "../xust/xsd" }
+xust_tree = { path = "../xust/tree" }
+
+[[bin]]
+name = "conformance"
+path = "src/bin/conformance.rs"
