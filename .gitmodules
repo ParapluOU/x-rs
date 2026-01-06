@@ -1,0 +1,12 @@
+[submodule "xrust"]
+	path = xrust
+	url = https://github.com/parapluou/xrust.git
+[submodule "xee"]
+	path = xee
+	url = https://github.com/parapluou/xee.git
+[submodule "xot"]
+	path = xot
+	url = https://github.com/parapluou/xot.git
+[submodule "xust"]
+	path = xust
+	url = https://gitlab.gnome.org/vandenoever/xust.git
