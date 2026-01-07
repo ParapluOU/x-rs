@@ -161,6 +161,59 @@ pub fn parse_test_set(test_set_path: &Path, _global_envs: &HashMap<String, Envir
 
     let base_dir = test_set_path.parent().unwrap_or(Path::new("."));
 
+    // Parse environments using indexed queries
+    let env_count_result = engine.xpath(&doc, "count(/*[local-name()='test-set']/*[local-name()='environment'])")?;
+    let env_count: usize = env_count_result.to_string().trim().parse().unwrap_or(0);
+
+    for env_idx in 1..=env_count {
+        // Get environment name
+        let env_name_xpath = format!("string(/*[local-name()='test-set']/*[local-name()='environment'][{}]/@name)", env_idx);
+        let env_name = engine.xpath(&doc, &env_name_xpath)?.to_string().trim().to_string();
+        if env_name.is_empty() { continue; }
+
+        let mut env = Environment {
+            name: env_name.clone(),
+            sources: Vec::new(),
+            stylesheet: None,
+            schemas: Vec::new(),
+        };
+
+        // Parse source elements in this environment
+        let source_count_xpath = format!("count(/*[local-name()='test-set']/*[local-name()='environment'][{}]/*[local-name()='source'])", env_idx);
+        let source_count: usize = engine.xpath(&doc, &source_count_xpath)
+            .map(|r| r.to_string().trim().parse().unwrap_or(0))
+            .unwrap_or(0);
+
+        for src_idx in 1..=source_count {
+            let role_xpath = format!("string(/*[local-name()='test-set']/*[local-name()='environment'][{}]/*[local-name()='source'][{}]/@role)", env_idx, src_idx);
+            let role = engine.xpath(&doc, &role_xpath)
+                .map(|r| r.to_string().trim().to_string())
+                .unwrap_or_default();
+
+            let file_xpath = format!("string(/*[local-name()='test-set']/*[local-name()='environment'][{}]/*[local-name()='source'][{}]/@file)", env_idx, src_idx);
+            let file = engine.xpath(&doc, &file_xpath)
+                .ok()
+                .map(|r| r.to_string().trim().to_string())
+                .filter(|s| !s.is_empty())
+                .map(|s| base_dir.join(s));
+
+            let content_xpath = format!("string(/*[local-name()='test-set']/*[local-name()='environment'][{}]/*[local-name()='source'][{}]/*[local-name()='content'])", env_idx, src_idx);
+            let content = engine.xpath(&doc, &content_xpath)
+                .ok()
+                .map(|r| r.to_string())
+                .filter(|s| !s.trim().is_empty());
+
+            env.sources.push(Source {
+                role,
+                file,
+                content,
+                uri: None,
+            });
+        }
+
+        test_set.environments.insert(env_name, env);
+    }
+
     // Parse test cases using indexed queries
     let test_case_count_result = engine.xpath(&doc, "count(//*[local-name()='test-case'])")?;
     let test_case_count: usize = test_case_count_result.to_string().trim().parse().unwrap_or(0);
@@ -177,8 +230,8 @@ pub fn parse_test_set(test_set_path: &Path, _global_envs: &HashMap<String, Envir
             .map(|r| r.to_string().trim().to_string())
             .unwrap_or_default();
 
-        // Get stylesheet
-        let style_xpath = format!("string(//*[local-name()='test-case'][{}]//*[local-name()='stylesheet']/@file)", idx);
+        // Get stylesheet from test/stylesheet/@file
+        let style_xpath = format!("string(//*[local-name()='test-case'][{}]/*[local-name()='test']/*[local-name()='stylesheet']/@file)", idx);
         let stylesheet = engine.xpath(&doc, &style_xpath)
             .ok()
             .map(|r| r.to_string().trim().to_string())
@@ -186,8 +239,22 @@ pub fn parse_test_set(test_set_path: &Path, _global_envs: &HashMap<String, Envir
             .map(|s| base_dir.join(s));
 
         // Get environment ref
-        let env_xpath = format!("string(//*[local-name()='test-case'][{}]//*[local-name()='environment']/@ref)", idx);
+        let env_xpath = format!("string(//*[local-name()='test-case'][{}]/*[local-name()='environment']/@ref)", idx);
         let env_ref = engine.xpath(&doc, &env_xpath)
+            .ok()
+            .map(|r| r.to_string().trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        // Get initial-template
+        let init_template_xpath = format!("string(//*[local-name()='test-case'][{}]/*[local-name()='test']/*[local-name()='initial-template']/@name)", idx);
+        let initial_template = engine.xpath(&doc, &init_template_xpath)
+            .ok()
+            .map(|r| r.to_string().trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        // Get initial-mode
+        let init_mode_xpath = format!("string(//*[local-name()='test-case'][{}]/*[local-name()='test']/*[local-name()='initial-mode']/@name)", idx);
+        let initial_mode = engine.xpath(&doc, &init_mode_xpath)
             .ok()
             .map(|r| r.to_string().trim().to_string())
             .filter(|s| !s.is_empty());
@@ -197,8 +264,8 @@ pub fn parse_test_set(test_set_path: &Path, _global_envs: &HashMap<String, Envir
             description: desc,
             environment: env_ref,
             stylesheet,
-            initial_mode: None,
-            initial_template: None,
+            initial_mode,
+            initial_template,
             dependencies: Vec::new(),
             result: ExpectedResult::AssertResult(String::new()),
         });
@@ -233,37 +300,28 @@ fn run_test_case(
         }
     };
 
-    // Get stylesheet path
+    // Get stylesheet path (must be specified in test case)
     let stylesheet_path = match &test_case.stylesheet {
         Some(p) => p.clone(),
         None => {
-            if let Some(env_name) = &test_case.environment {
-                if let Some(env) = environments.get(env_name) {
-                    if let Some(p) = &env.stylesheet {
-                        p.clone()
-                    } else {
-                        return make_result(
-                            TestOutcome::Error("No stylesheet in environment".to_string()),
-                            None,
-                            None,
-                        );
-                    }
-                } else {
-                    return make_result(
-                        TestOutcome::Error(format!("Environment not found: {}", env_name)),
-                        None,
-                        None,
-                    );
-                }
-            } else {
-                return make_result(
-                    TestOutcome::NotApplicable,
-                    None,
-                    Some("No stylesheet specified".to_string()),
-                );
-            }
+            return make_result(
+                TestOutcome::NotApplicable,
+                None,
+                Some("No stylesheet specified in test case".to_string()),
+            );
         }
     };
+
+    // Validate environment exists if referenced
+    if let Some(env_name) = &test_case.environment {
+        if !environments.contains_key(env_name) {
+            return make_result(
+                TestOutcome::Error(format!("Environment not found: {}", env_name)),
+                None,
+                None,
+            );
+        }
+    }
 
     // Load stylesheet
     let stylesheet_content = match fs::read_to_string(&stylesheet_path) {
@@ -277,10 +335,12 @@ fn run_test_case(
         }
     };
 
-    // Get source document
+    // Get source document from environment
     let source_doc = if let Some(env_name) = &test_case.environment {
         if let Some(env) = environments.get(env_name) {
-            if let Some(source) = env.sources.first() {
+            // Find source with role="." (context item)
+            let context_source = env.sources.iter().find(|s| s.role == ".");
+            if let Some(source) = context_source.or(env.sources.first()) {
                 if let Some(ref content) = source.content {
                     match engine.parse(content) {
                         Ok(doc) => Some(doc),
@@ -293,12 +353,12 @@ fn run_test_case(
                         }
                     }
                 } else if let Some(ref file) = source.file {
-                    let path = base_dir.join(file);
-                    match engine.parse_file(&path) {
+                    // file is already an absolute path from parsing
+                    match engine.parse_file(file) {
                         Ok(doc) => Some(doc),
                         Err(e) => {
                             return make_result(
-                                TestOutcome::Error(format!("Failed to load source: {}", e)),
+                                TestOutcome::Error(format!("Failed to load source {:?}: {}", file, e)),
                                 None,
                                 None,
                             );
