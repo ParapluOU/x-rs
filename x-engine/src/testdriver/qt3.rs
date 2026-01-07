@@ -747,21 +747,34 @@ fn check_dependency(dependency: &Dependency, engine: &XEngine) -> bool {
 pub fn run_test_case(
     engine: &mut XEngine,
     test_case: &TestCase,
+    test_set_name: &str,
     environments: &HashMap<String, Environment>,
     _base_dir: &Path,
 ) -> TestResult {
     let start = Instant::now();
 
+    // Helper to create TestResult with common fields
+    let make_result = |outcome: TestOutcome, expected: Option<String>, actual: Option<String>| {
+        TestResult {
+            test_id: test_case.name.clone(),
+            test_set: test_set_name.to_string(),
+            test_suite: "qt3".to_string(),
+            description: Some(test_case.description.clone()),
+            outcome,
+            expected,
+            actual,
+            duration: start.elapsed(),
+        }
+    };
+
     // Check dependencies
     for dep in &test_case.dependencies {
         if !check_dependency(dep, engine) {
-            return TestResult {
-                test_id: test_case.name.clone(),
-                outcome: TestOutcome::NotApplicable,
-                expected: None,
-                actual: Some(format!("Dependency not satisfied: {} = {}", dep.dep_type, dep.value)),
-                duration: start.elapsed(),
-            };
+            return make_result(
+                TestOutcome::NotApplicable,
+                None,
+                Some(format!("Dependency not satisfied: {} = {}", dep.dep_type, dep.value)),
+            );
         }
     }
 
@@ -780,13 +793,11 @@ pub fn run_test_case(
             match engine.parse_file(&source.file) {
                 Ok(doc) => Some(doc),
                 Err(e) => {
-                    return TestResult {
-                        test_id: test_case.name.clone(),
-                        outcome: TestOutcome::Error(format!("Failed to load context: {}", e)),
-                        expected: None,
-                        actual: None,
-                        duration: start.elapsed(),
-                    };
+                    return make_result(
+                        TestOutcome::Error(format!("Failed to load context: {}", e)),
+                        None,
+                        None,
+                    );
                 }
             }
         } else {
@@ -805,13 +816,11 @@ pub fn run_test_case(
         let empty_doc = match engine.parse("<empty/>") {
             Ok(d) => d,
             Err(e) => {
-                return TestResult {
-                    test_id: test_case.name.clone(),
-                    outcome: TestOutcome::Error(format!("Failed to create empty doc: {}", e)),
-                    expected: None,
-                    actual: None,
-                    duration: start.elapsed(),
-                };
+                return make_result(
+                    TestOutcome::Error(format!("Failed to create empty doc: {}", e)),
+                    None,
+                    None,
+                );
             }
         };
         engine.xpath(&empty_doc, &test_case.test)
@@ -828,13 +837,7 @@ pub fn run_test_case(
         Err(e) => Some(format!("Error: {}", e)),
     };
 
-    TestResult {
-        test_id: test_case.name.clone(),
-        outcome,
-        expected: Some(format!("{:?}", test_case.result)),
-        actual,
-        duration: start.elapsed(),
-    }
+    make_result(outcome, Some(format!("{:?}", test_case.result)), actual)
 }
 
 /// Check if a result satisfies an assertion
@@ -1063,6 +1066,9 @@ pub fn run_xpath_tests(
         Err(e) => {
             results.push(TestResult {
                 test_id: "catalog_parse".to_string(),
+                test_set: "catalog".to_string(),
+                test_suite: "qt3".to_string(),
+                description: Some("Parse QT3 catalog file".to_string()),
                 outcome: TestOutcome::Error(format!("Failed to parse catalog: {}", e)),
                 expected: None,
                 actual: None,
@@ -1092,6 +1098,7 @@ pub fn run_xpath_tests(
         eprintln!("[{}/{}] Processing test set: {}", set_idx + 1, total_test_sets, test_set_ref.name);
 
         let test_set_path = base_dir.join(&test_set_ref.file);
+        let test_set_name = &test_set_ref.name;
 
         // Wrap test set parsing in catch_unwind to handle panics
         let parse_result = panic::catch_unwind(AssertUnwindSafe(|| {
@@ -1102,7 +1109,10 @@ pub fn run_xpath_tests(
             Ok(Ok(ts)) => ts,
             Ok(Err(e)) => {
                 results.push(TestResult {
-                    test_id: format!("{}/parse", test_set_ref.name),
+                    test_id: format!("{}/parse", test_set_name),
+                    test_set: test_set_name.to_string(),
+                    test_suite: "qt3".to_string(),
+                    description: Some(format!("Parse test set {}", test_set_name)),
                     outcome: TestOutcome::Error(format!("Failed to parse test set: {}", e)),
                     expected: None,
                     actual: None,
@@ -1119,7 +1129,10 @@ pub fn run_xpath_tests(
                     "Unknown panic".to_string()
                 };
                 results.push(TestResult {
-                    test_id: format!("{}/parse", test_set_ref.name),
+                    test_id: format!("{}/parse", test_set_name),
+                    test_set: test_set_name.to_string(),
+                    test_suite: "qt3".to_string(),
+                    description: Some(format!("Parse test set {}", test_set_name)),
                     outcome: TestOutcome::Error(format!("Panic during test set parse: {}", panic_msg)),
                     expected: None,
                     actual: Some("PANIC".to_string()),
@@ -1133,10 +1146,12 @@ pub fn run_xpath_tests(
         for test_case in &test_set.test_cases {
             let start = Instant::now();
             let test_id = test_case.name.clone();
+            let description = test_case.description.clone();
 
             // Wrap in catch_unwind to handle engine panics gracefully
+            let test_set_name_clone = test_set_name.clone();
             let result = panic::catch_unwind(AssertUnwindSafe(|| {
-                run_test_case(engine, test_case, &test_set.environments, &test_set_path.parent().unwrap_or(Path::new(".")))
+                run_test_case(engine, test_case, &test_set_name_clone, &test_set.environments, &test_set_path.parent().unwrap_or(Path::new(".")))
             }));
 
             let test_result = match result {
@@ -1152,6 +1167,9 @@ pub fn run_xpath_tests(
                     };
                     TestResult {
                         test_id,
+                        test_set: test_set_name.to_string(),
+                        test_suite: "qt3".to_string(),
+                        description: Some(description),
                         outcome: TestOutcome::Error(format!("Engine panic: {}", panic_msg)),
                         expected: None,
                         actual: Some("PANIC".to_string()),

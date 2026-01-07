@@ -231,6 +231,37 @@ impl XEngine {
             Self::Xust(e) => e.xsd_version(),
         }
     }
+
+    // ==================== Convenience Methods ====================
+
+    /// Transform a document using an XSLT stylesheet (alias for xslt_to_string)
+    pub fn transform(&mut self, doc: &XDocument, stylesheet: &str) -> Result<String> {
+        self.xslt_to_string(doc, stylesheet)
+    }
+
+    /// Validate a schema file (checks if the schema itself is valid)
+    pub fn validate_schema(&mut self, schema_path: &Path) -> Result<bool> {
+        match self.load_schema_file(schema_path) {
+            Ok(()) => Ok(true),
+            Err(Error::Unsupported) => Err(Error::Unsupported),
+            Err(_) => Ok(false), // Schema is invalid
+        }
+    }
+
+    /// Validate an instance document against a schema file
+    pub fn validate_instance(&mut self, instance_path: &Path, schema_path: &Path) -> Result<bool> {
+        // Load schema
+        self.load_schema_file(schema_path)?;
+
+        // Parse instance
+        let instance_content = std::fs::read_to_string(instance_path)
+            .map_err(|e| Error::EngineError(format!("Failed to read instance: {}", e)))?;
+        let doc = self.parse(&instance_content)?;
+
+        // Validate
+        let result = self.validate(&doc)?;
+        Ok(result.valid)
+    }
 }
 
 impl XDocument {

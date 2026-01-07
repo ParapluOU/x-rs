@@ -61,10 +61,48 @@ pub struct ComplianceReport {
     pub suite: String,
     pub summary: ComplianceSummary,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub results: Vec<TestResultSummary>,
+    pub results: Vec<DetailedTestResult>,
 }
 
-/// Simplified test result for serialization
+/// Detailed test result for serialization (includes all metadata)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetailedTestResult {
+    pub test_id: String,
+    pub test_set: String,
+    pub test_suite: String,
+    pub description: Option<String>,
+    pub outcome: String,
+    pub message: Option<String>,
+    pub expected: Option<String>,
+    pub actual: Option<String>,
+    pub duration_ms: u64,
+}
+
+impl From<&TestResult> for DetailedTestResult {
+    fn from(r: &TestResult) -> Self {
+        let (outcome, message) = match &r.outcome {
+            TestOutcome::Pass => ("pass".to_string(), None),
+            TestOutcome::Fail(msg) => ("fail".to_string(), Some(msg.clone())),
+            TestOutcome::Error(msg) => ("error".to_string(), Some(msg.clone())),
+            TestOutcome::NotApplicable => ("n/a".to_string(), None),
+            TestOutcome::Skipped => ("skipped".to_string(), None),
+        };
+
+        Self {
+            test_id: r.test_id.clone(),
+            test_set: r.test_set.clone(),
+            test_suite: r.test_suite.clone(),
+            description: r.description.clone(),
+            outcome,
+            message,
+            expected: r.expected.clone(),
+            actual: r.actual.clone(),
+            duration_ms: r.duration.as_millis() as u64,
+        }
+    }
+}
+
+/// Simplified test result for backward compatibility
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestResultSummary {
     pub test_id: String,
@@ -96,14 +134,14 @@ impl ComplianceReport {
     /// Create a new compliance report
     pub fn new(engine: &str, suite: &str, results: Vec<TestResult>) -> Self {
         let summary = ComplianceSummary::from_results(&results);
-        let result_summaries = results.iter().map(TestResultSummary::from).collect();
+        let detailed_results = results.iter().map(DetailedTestResult::from).collect();
 
         Self {
             engine: engine.to_string(),
             timestamp: Utc::now(),
             suite: suite.to_string(),
             summary,
-            results: result_summaries,
+            results: detailed_results,
         }
     }
 
@@ -133,14 +171,15 @@ impl ComplianceReport {
             if failed.is_empty() {
                 md.push_str("No failed tests!\n\n");
             } else {
-                md.push_str("| Test ID | Outcome | Message |\n");
-                md.push_str("|---------|---------|--------|\n");
+                md.push_str("| Test Set | Test ID | Outcome | Message |\n");
+                md.push_str("|----------|---------|---------|--------|\n");
                 for r in failed.iter().take(100) {
                     md.push_str(&format!(
-                        "| {} | {} | {} |\n",
+                        "| {} | {} | {} | {} |\n",
+                        r.test_set,
                         r.test_id,
                         r.outcome,
-                        r.message.as_deref().unwrap_or("-")
+                        r.message.as_deref().unwrap_or("-").chars().take(50).collect::<String>()
                     ));
                 }
                 if failed.len() > 100 {
@@ -155,6 +194,32 @@ impl ComplianceReport {
     /// Generate a JSON report
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    /// Generate a CSV report with all test results
+    pub fn to_csv(&self) -> String {
+        let mut csv = String::new();
+
+        // Header
+        csv.push_str("test_suite,test_set,test_id,description,outcome,message,duration_ms\n");
+
+        // Data rows
+        for r in &self.results {
+            let desc = r.description.as_deref().unwrap_or("").replace('"', "\"\"");
+            let msg = r.message.as_deref().unwrap_or("").replace('"', "\"\"");
+            csv.push_str(&format!(
+                "{},{},{},\"{}\",{},\"{}\",{}\n",
+                r.test_suite,
+                r.test_set,
+                r.test_id,
+                desc,
+                r.outcome,
+                msg,
+                r.duration_ms
+            ));
+        }
+
+        csv
     }
 }
 
